@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import { supabaseBrowser } from '@/lib/supabase/browser';
 import { Restaurant } from '@/lib/types/database';
 import { PLAN_LIMITS } from '@/lib/subscription/plans';
@@ -16,17 +16,26 @@ import {
   ArrowUp,
   Sparkles,
   TrendingUp,
-  Award
+  Award,
+  ShoppingCart,
+  TableProperties,
+  Plus,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { getOrCreateDeviceId, getCartKey } from '@/lib/table-ordering/device';
+import { CartItem, TableContext, TableSeat } from '@/lib/table-ordering/types';
+import RequestActivationCard from '@/components/table-ordering/RequestActivationCard';
+import SeatSelector from '@/components/table-ordering/SeatSelector';
+import CartDrawer from '@/components/table-ordering/CartDrawer';
+import VariantPicker from '@/components/table-ordering/VariantPicker';
 
-type Dish_variants= {
+type Dish_variants = {
   id: string;
   name: string;
   price: number;
-}
+};
 
 type PublicMenuItem = {
   id: string;
@@ -35,7 +44,7 @@ type PublicMenuItem = {
   price: number;
   image_url: string | null;
   is_available: boolean;
-  dish_variants: Dish_variants[]
+  dish_variants: Dish_variants[];
 };
 
 type PublicMenuCategory = {
@@ -76,18 +85,15 @@ function SkeletonLoader() {
 function ImageModal({
   dish,
   themeColor,
-  onClose
+  onClose,
 }: {
   dish: PublicMenuItem;
   themeColor: string;
   onClose: () => void;
 }) {
-
   useEffect(() => {
-    // prevent background scroll (better fix for mobile too)
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
-
     return () => {
       document.body.style.overflow = '';
       document.documentElement.style.overflow = '';
@@ -99,19 +105,16 @@ function ImageModal({
       className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 animate-in fade-in duration-200"
       onClick={onClose}
     >
-      {/* ✅ FIXED: added min-h-0 */}
       <div
         className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col min-h-0 shadow-2xl animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* IMAGE */}
         <div className="relative flex-shrink-0 rounded-2xl">
           <img
             src={dish.image_url!}
             alt={dish.name}
             className="w-full max-h-[60vh] object-contain bg-slate-50 rounded-2xl"
           />
-
           <button
             onClick={onClose}
             className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur rounded-full flex items-center justify-center hover:bg-white transition-colors shadow-lg"
@@ -119,14 +122,9 @@ function ImageModal({
             <X className="w-5 h-5 text-slate-700" />
           </button>
         </div>
-
-        {/* ✅ SCROLLABLE CONTENT */}
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain scroll-smooth p-6 md:p-8">
           <div className="flex justify-between items-start gap-4 mb-3">
-            <h3 className="text-2xl md:text-3xl font-bold text-slate-900">
-              {dish.name}
-            </h3>
-
+            <h3 className="text-2xl md:text-3xl font-bold text-slate-900">{dish.name}</h3>
             <div className="flex flex-col items-end gap-1">
               {dish.dish_variants?.length > 0 ? (
                 <>
@@ -138,16 +136,12 @@ function ImageModal({
                   ))}
                 </>
               ) : (
-                <div
-                  className="text-2xl md:text-3xl font-bold"
-                  style={{ color: themeColor }}
-                >
+                <div className="text-2xl md:text-3xl font-bold" style={{ color: themeColor }}>
                   ₹{dish.price}
                 </div>
               )}
             </div>
           </div>
-
           {dish.description && (
             <p className="text-slate-600 text-base md:text-lg leading-relaxed whitespace-pre-line">
               {dish.description}
@@ -159,43 +153,25 @@ function ImageModal({
   );
 }
 
-function DishBadges({
-  dish,
-  index,
-  hasImage
-}: {
-  dish: PublicMenuItem;
-  index: number;
-  hasImage: boolean;
-}) {
+function DishBadges({ dish, index, hasImage }: { dish: PublicMenuItem; index: number; hasImage: boolean }) {
   const badges = [];
-
   if (index < 3 && hasImage) {
-    badges.push({ text: "Chef's Special", icon: Award, color: "bg-amber-500" });
+    badges.push({ text: "Chef's Special", icon: Award, color: 'bg-amber-500' });
   } else if (index < 5) {
-    badges.push({ text: "Popular", icon: TrendingUp, color: "bg-blue-500" });
+    badges.push({ text: 'Popular', icon: TrendingUp, color: 'bg-blue-500' });
   }
-
   const maxPrice =
-    dish.dish_variants?.length > 0
-      ? Math.max(...dish.dish_variants.map(v => v.price))
-      : dish.price;
-
+    dish.dish_variants?.length > 0 ? Math.max(...dish.dish_variants.map((v) => v.price)) : dish.price;
   if (hasImage && maxPrice > 200) {
-    badges.push({ text: "Premium", icon: Sparkles, color: "bg-purple-500" });
+    badges.push({ text: 'Premium', icon: Sparkles, color: 'bg-purple-500' });
   }
-
   if (badges.length === 0) return null;
-
   return (
     <div className="flex flex-wrap gap-2 mb-2">
       {badges.map((badge, i) => {
         const Icon = badge.icon;
         return (
-          <Badge
-            key={i}
-            className={`${badge.color} text-white text-xs px-2 py-1 flex items-center gap-1`}
-          >
+          <Badge key={i} className={`${badge.color} text-white text-xs px-2 py-1 flex items-center gap-1`}>
             <Icon className="w-3 h-3" />
             {badge.text}
           </Badge>
@@ -207,7 +183,9 @@ function DishBadges({
 
 export default function PublicMenuPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const slug = params.slug as string;
+  const tableToken = searchParams.get('table');
 
   const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [categories, setCategories] = useState<PublicMenuCategory[]>([]);
@@ -223,16 +201,73 @@ export default function PublicMenuPage() {
   const categoryRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const observerRef = useRef<IntersectionObserver | null>(null);
 
+  // Table mode state
+  const [tableContext, setTableContext] = useState<TableContext | null>(null);
+  const [tableContextLoading, setTableContextLoading] = useState(false);
+  const [deviceId, setDeviceId] = useState('');
+  const [claimedSeat, setClaimedSeat] = useState<TableSeat | null>(null);
+  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [showCart, setShowCart] = useState(false);
+  const [showRequestCard, setShowRequestCard] = useState(false);
+  const [showSeatSelector, setShowSeatSelector] = useState(false);
+  const [variantDish, setVariantDish] = useState<PublicMenuItem | null>(null);
+
   useEffect(() => {
     loadMenu();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setShowScrollTop(window.scrollY > 500);
-    };
+    if (tableToken && slug) {
+      setDeviceId(getOrCreateDeviceId());
+      loadTableContext();
+    }
+  }, [tableToken, slug]);
 
+  useEffect(() => {
+    if (tableToken && restaurant) {
+      const cartKey = getCartKey(restaurant.id, tableToken);
+      const saved = localStorage.getItem(cartKey);
+      if (saved) {
+        try {
+          setCartItems(JSON.parse(saved));
+        } catch {}
+      }
+    }
+  }, [tableToken, restaurant]);
+
+  useEffect(() => {
+    if (tableToken && restaurant) {
+      const cartKey = getCartKey(restaurant.id, tableToken);
+      localStorage.setItem(cartKey, JSON.stringify(cartItems));
+    }
+  }, [cartItems, tableToken, restaurant]);
+
+  const loadTableContext = async () => {
+    setTableContextLoading(true);
+    try {
+      const res = await fetch(`/api/table-ordering/context?slug=${slug}&table=${tableToken}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setTableContext(data);
+
+      if (data.session?.status === 'active') {
+        const did = getOrCreateDeviceId();
+        const mySeat = data.seats.find((s: TableSeat) => s.device_id === did);
+        if (mySeat) setClaimedSeat(mySeat);
+      }
+    } catch (err) {
+      console.error('Table context error:', err);
+    } finally {
+      setTableContextLoading(false);
+    }
+  };
+
+  const refreshTableContext = async () => {
+    await loadTableContext();
+  };
+
+  useEffect(() => {
+    const handleScroll = () => setShowScrollTop(window.scrollY > 500);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -241,71 +276,56 @@ export default function PublicMenuPage() {
     if (categories.length > 0 && !loading) {
       const isMobile = window.innerWidth < 768;
       const initialExpanded = new Set<string>();
-
       categories.forEach((cat, index) => {
-        if (!isMobile || index === 0) {
-          initialExpanded.add(cat.id);
-        }
+        if (!isMobile || index === 0) initialExpanded.add(cat.id);
       });
-
       setExpandedCategories(initialExpanded);
     }
   }, [categories, loading]);
 
   useEffect(() => {
     if (categories.length === 0 || loading) return;
-
     observerRef.current = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            setActiveCategory(entry.target.id);
-          }
+          if (entry.isIntersecting) setActiveCategory(entry.target.id);
         });
       },
-      {
-        rootMargin: '-20% 0px -60% 0px',
-        threshold: 0
-      }
+      { rootMargin: '-20% 0px -60% 0px', threshold: 0 }
     );
-
     categoryRefs.current.forEach((element) => {
       if (element) observerRef.current?.observe(element);
     });
-
-    return () => {
-      observerRef.current?.disconnect();
-    };
+    return () => observerRef.current?.disconnect();
   }, [categories, loading]);
 
   const loadMenu = async () => {
     setLoading(true);
     setError(null);
-
     try {
-      const { data: restaurant, error: restaurantError } =
-        await supabaseBrowser
-          .from('restaurants')
-          .select('*')
-          .eq('slug', slug)
-          .maybeSingle();
+      const { data: restaurantData, error: restaurantError } = await supabaseBrowser
+        .from('restaurants')
+        .select('*')
+        .eq('slug', slug)
+        .maybeSingle();
 
-      if (restaurantError || !restaurant) {
+      if (restaurantError || !restaurantData) {
         setError('Restaurant not found');
         return;
       }
 
-      const isExpired = restaurant.subscription_status === 'expired' ||
-                       restaurant.subscription_status === 'canceled';
-      const isOnHold = restaurant.is_on_hold === true;
+      const isExpired =
+        restaurantData.subscription_status === 'expired' ||
+        restaurantData.subscription_status === 'canceled';
+      const isOnHold = restaurantData.is_on_hold === true;
 
       if (isExpired || isOnHold) {
-        setRestaurant(restaurant);
+        setRestaurant(restaurantData);
         setError('subscription_unavailable');
         return;
       }
 
-      setRestaurant(restaurant);
+      setRestaurant(restaurantData);
 
       const { data, error } = await supabaseBrowser
         .from('menu_categories')
@@ -327,7 +347,7 @@ export default function PublicMenuPage() {
             )
           )
         `)
-        .eq('restaurant_id', restaurant.id)
+        .eq('restaurant_id', restaurantData.id)
         .eq('is_active', true)
         .order('display_order', { ascending: true });
 
@@ -337,14 +357,16 @@ export default function PublicMenuPage() {
       }
 
       const formatted: PublicMenuCategory[] =
-      data?.map((category) => ({
-        ...category,
-        dishes:
-          category.dishes?.map((item) => ({
-            ...item,
-            dish_variants: item.dish_variants ?? []  // 🔥 FIX
-          })).filter((item) => item.is_available) ?? [],
-      })) ?? [];
+        data?.map((category) => ({
+          ...category,
+          dishes:
+            category.dishes
+              ?.map((item) => ({
+                ...item,
+                dish_variants: item.dish_variants ?? [],
+              }))
+              .filter((item) => item.is_available) ?? [],
+        })) ?? [];
 
       setCategories(formatted);
     } catch (err) {
@@ -355,49 +377,33 @@ export default function PublicMenuPage() {
     }
   };
 
-  const planLimits = restaurant
-    ? PLAN_LIMITS[restaurant.subscription_plan]
-    : null;
-
+  const planLimits = restaurant ? PLAN_LIMITS[restaurant.subscription_plan] : null;
   const lastTrackedDishRef = useRef<string | null>(null);
 
   useEffect(() => {
-    console.log("Is is working? ", selectedDish, restaurant)
     if (!selectedDish || !restaurant) return;
-
-    if (
-      restaurant.subscription_plan !== 'pro' &&
-      restaurant.subscription_plan !== 'enterprise'
-    ) return;
-
+    if (restaurant.subscription_plan !== 'pro' && restaurant.subscription_plan !== 'enterprise') return;
     if (lastTrackedDishRef.current === selectedDish.id) return;
     lastTrackedDishRef.current = selectedDish.id;
-
     fetch('/api/analytics/dish-view', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        dish_id: selectedDish.id,
-        restaurant_id: restaurant.id,
-      }),
+      body: JSON.stringify({ dish_id: selectedDish.id, restaurant_id: restaurant.id }),
     });
   }, [selectedDish, restaurant]);
 
-  const showGoogleReview =
-    planLimits?.googleReviewEnabled && restaurant?.google_place_id;
-
+  const showGoogleReview = planLimits?.googleReviewEnabled && restaurant?.google_place_id;
   const showWatermark = !planLimits?.removeWatermark;
 
   const filteredCategories = useMemo(() => {
     if (!searchQuery.trim()) return categories;
-
     const query = searchQuery.toLowerCase();
     return categories
       .map((category) => ({
         ...category,
-        dishes: category.dishes.filter((dish) =>
-          dish.name.toLowerCase().includes(query) ||
-          dish.description?.toLowerCase().includes(query)
+        dishes: category.dishes.filter(
+          (dish) =>
+            dish.name.toLowerCase().includes(query) || dish.description?.toLowerCase().includes(query)
         ),
       }))
       .filter((category) => category.dishes.length > 0);
@@ -412,11 +418,8 @@ export default function PublicMenuPage() {
   const toggleCategory = (categoryId: string) => {
     setExpandedCategories((prev) => {
       const next = new Set(prev);
-      if (next.has(categoryId)) {
-        next.delete(categoryId);
-      } else {
-        next.add(categoryId);
-      }
+      if (next.has(categoryId)) next.delete(categoryId);
+      else next.add(categoryId);
       return next;
     });
   };
@@ -426,16 +429,67 @@ export default function PublicMenuPage() {
     if (element) {
       const offset = 180;
       const elementPosition = element.getBoundingClientRect().top + window.scrollY;
-      window.scrollTo({
-        top: elementPosition - offset,
-        behavior: 'smooth',
-      });
+      window.scrollTo({ top: elementPosition - offset, behavior: 'smooth' });
     }
   };
 
-  const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
+  const handleAddToCart = (dish: PublicMenuItem) => {
+    if (!claimedSeat) return;
+
+    if (dish.dish_variants?.length > 0) {
+      setVariantDish(dish);
+      return;
+    }
+
+    const item: CartItem = {
+      dish_id: dish.id,
+      dish_name: dish.name,
+      variant_id: null,
+      variant_name: null,
+      unit_price: dish.price,
+      quantity: 1,
+    };
+
+    setCartItems((prev) => {
+      const existing = prev.findIndex((i) => i.dish_id === dish.id && i.variant_id === null);
+      if (existing >= 0) {
+        const updated = [...prev];
+        updated[existing].quantity += 1;
+        return updated;
+      }
+      return [...prev, item];
+    });
   };
+
+  const handleVariantSelected = (dish: PublicMenuItem, variant: { id: string; name: string; price: number }) => {
+    const item: CartItem = {
+      dish_id: dish.id,
+      dish_name: dish.name,
+      variant_id: variant.id,
+      variant_name: variant.name,
+      unit_price: variant.price,
+      quantity: 1,
+    };
+
+    setCartItems((prev) => {
+      const existing = prev.findIndex((i) => i.dish_id === dish.id && i.variant_id === variant.id);
+      if (existing >= 0) {
+        const updated = [...prev];
+        updated[existing].quantity += 1;
+        return updated;
+      }
+      return [...prev, item];
+    });
+
+    setVariantDish(null);
+  };
+
+  const isTableMode = !!tableToken;
+  const sessionStatus = tableContext?.session?.status ?? null;
+  const isSessionActive = sessionStatus === 'active';
+  const cartCount = cartItems.reduce((sum, i) => sum + i.quantity, 0);
 
   if (loading) {
     return (
@@ -455,40 +509,20 @@ export default function PublicMenuPage() {
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-amber-50 to-orange-50 px-4 py-12">
         <div className="max-w-lg w-full bg-white rounded-2xl shadow-2xl p-10 text-center">
           <div className="w-20 h-20 bg-gradient-to-br from-amber-100 to-amber-200 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg">
-            <svg
-              className="w-10 h-10 text-amber-600"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-              />
+            <svg className="w-10 h-10 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-4">
-            Service Temporarily Unavailable
-          </h1>
+          <h1 className="text-3xl font-bold text-slate-900 mb-4">Service Temporarily Unavailable</h1>
           <p className="text-slate-600 mb-8 leading-relaxed">
             We apologize for the inconvenience. This digital menu is currently unavailable as the subscription may have expired or the service is on hold.
           </p>
           <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-6 border border-slate-200">
             {restaurant.logo_url && (
-              <img
-                src={restaurant.logo_url}
-                alt={restaurant.name}
-                className="w-16 h-16 rounded-full mx-auto mb-4 object-cover border-2 border-white shadow-md"
-              />
+              <img src={restaurant.logo_url} alt={restaurant.name} className="w-16 h-16 rounded-full mx-auto mb-4 object-cover border-2 border-white shadow-md" />
             )}
-            <p className="text-lg text-slate-900 font-bold mb-2">
-              {restaurant.name}
-            </p>
-            <p className="text-sm text-slate-600">
-              Please contact the restaurant directly for assistance or visit us in person to view our menu.
-            </p>
+            <p className="text-lg text-slate-900 font-bold mb-2">{restaurant.name}</p>
+            <p className="text-sm text-slate-600">Please contact the restaurant directly for assistance or visit us in person to view our menu.</p>
           </div>
         </div>
       </div>
@@ -502,12 +536,8 @@ export default function PublicMenuPage() {
           <div className="w-20 h-20 bg-slate-200 rounded-full flex items-center justify-center mx-auto mb-6">
             <Utensils className="w-10 h-10 text-slate-500" />
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-3">
-            Menu Not Found
-          </h1>
-          <p className="text-slate-600 text-lg">
-            {error || 'This menu is not available'}
-          </p>
+          <h1 className="text-3xl font-bold text-slate-900 mb-3">Menu Not Found</h1>
+          <p className="text-slate-600 text-lg">{error || 'This menu is not available'}</p>
         </div>
       </div>
     );
@@ -517,9 +547,7 @@ export default function PublicMenuPage() {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50 pb-20 md:pb-8">
       <div
         className="relative overflow-hidden"
-        style={{
-          background: `linear-gradient(135deg, ${restaurant.theme_color} 0%, ${restaurant.theme_color}dd 100%)`,
-        }}
+        style={{ background: `linear-gradient(135deg, ${restaurant.theme_color} 0%, ${restaurant.theme_color}dd 100%)` }}
       >
         <div className="absolute inset-0 bg-black opacity-5"></div>
         <div className="relative max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12 md:py-16">
@@ -528,25 +556,71 @@ export default function PublicMenuPage() {
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-3 drop-shadow-lg">
                 {restaurant.name}
               </h1>
-              <p className="text-white/90 text-lg md:text-xl font-medium">
-                Digital Menu
-              </p>
+              <p className="text-white/90 text-lg md:text-xl font-medium">Digital Menu</p>
             </div>
-
             {restaurant.logo_url && (
               <div className="flex-shrink-0">
                 <div className="w-28 h-28 md:w-36 md:h-36 lg:w-40 lg:h-40 rounded-full bg-white shadow-2xl p-2 ring-4 ring-white/30">
-                  <img
-                    src={restaurant.logo_url}
-                    alt={restaurant.name}
-                    className="w-full h-full object-cover rounded-full"
-                  />
+                  <img src={restaurant.logo_url} alt={restaurant.name} className="w-full h-full object-cover rounded-full" />
                 </div>
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {isTableMode && tableContext && (
+        <div
+          className="sticky top-0 z-30 border-b border-white/20 shadow-sm"
+          style={{ backgroundColor: restaurant.theme_color }}
+        >
+          <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2 text-white">
+              <TableProperties className="w-4 h-4 flex-shrink-0" />
+              <span className="text-sm font-semibold">
+                Table {tableContext.table.table_number}
+                {claimedSeat && ` · Seat ${claimedSeat.seat_number}`}
+              </span>
+              <span
+                className="text-xs px-2 py-0.5 rounded-full font-medium"
+                style={{ backgroundColor: 'rgba(255,255,255,0.2)', color: 'white' }}
+              >
+                {sessionStatus === 'active' ? 'Active' : sessionStatus === 'pending' ? 'Waiting' : 'No Session'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              {!isSessionActive && !tableContextLoading && (
+                <Button
+                  size="sm"
+                  onClick={() => setShowRequestCard(true)}
+                  className="text-xs h-8 bg-white/20 hover:bg-white/30 text-white border-0"
+                >
+                  Request Activation
+                </Button>
+              )}
+              {isSessionActive && !claimedSeat && (
+                <Button
+                  size="sm"
+                  onClick={() => setShowSeatSelector(true)}
+                  className="text-xs h-8 bg-white/20 hover:bg-white/30 text-white border-0"
+                >
+                  Pick Seat
+                </Button>
+              )}
+              {isSessionActive && claimedSeat && cartCount > 0 && (
+                <Button
+                  size="sm"
+                  onClick={() => setShowCart(true)}
+                  className="text-xs h-8 bg-white text-slate-900 hover:bg-white/90 border-0 font-semibold"
+                >
+                  <ShoppingCart className="w-3.5 h-3.5 mr-1" />
+                  Cart ({cartCount})
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="relative -mt-8 mb-6">
@@ -584,11 +658,7 @@ export default function PublicMenuPage() {
                       ? 'text-white shadow-md'
                       : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
-                  style={
-                    activeCategory === category.id
-                      ? { backgroundColor: restaurant.theme_color }
-                      : {}
-                  }
+                  style={activeCategory === category.id ? { backgroundColor: restaurant.theme_color } : {}}
                 >
                   {category.name}
                 </button>
@@ -623,9 +693,7 @@ export default function PublicMenuPage() {
             <div className="mb-12">
               <div className="flex items-center gap-2 mb-6">
                 <Sparkles className="w-6 h-6" style={{ color: restaurant.theme_color }} />
-                <h2 className="text-2xl md:text-3xl font-bold text-slate-900">
-                  Featured Dishes
-                </h2>
+                <h2 className="text-2xl md:text-3xl font-bold text-slate-900">Featured Dishes</h2>
               </div>
               <div className="relative">
                 <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x snap-mandatory">
@@ -636,41 +704,24 @@ export default function PublicMenuPage() {
                       onClick={() => setSelectedDish(dish)}
                     >
                       <div className="relative h-48">
-                        <img
-                          src={dish.image_url!}
-                          alt={dish.name}
-                          className="w-full h-full object-cover"
-                        />
+                        <img src={dish.image_url!} alt={dish.name} className="w-full h-full object-cover" />
                         <div className="absolute top-2 left-2">
                           <DishBadges dish={dish} index={index} hasImage={true} />
                         </div>
                       </div>
                       <div className="p-4">
-                        <h3 className="font-bold text-lg text-slate-900 mb-1 line-clamp-1">
-                          {dish.name}
-                        </h3>
+                        <h3 className="font-bold text-lg text-slate-900 mb-1 line-clamp-1">{dish.name}</h3>
                         {dish.description && (
-                          <p className="text-sm text-slate-600 mb-3 line-clamp-2">
-                            {dish.description}
-                          </p>
+                          <p className="text-sm text-slate-600 mb-3 line-clamp-2">{dish.description}</p>
                         )}
                         <div
                           className="inline-flex flex-col items-start px-3 py-1.5 rounded-lg text-sm font-semibold"
-                          style={{
-                            backgroundColor: `${restaurant.theme_color}15`,
-                            color: restaurant.theme_color,
-                          }}
+                          style={{ backgroundColor: `${restaurant.theme_color}15`, color: restaurant.theme_color }}
                         >
                           {dish.dish_variants?.length > 0 ? (
-                            dish.dish_variants.map((v) => (
-                              <span key={v.id}>
-                                {v.name} — ₹{v.price}
-                              </span>
-                            ))
+                            dish.dish_variants.map((v) => <span key={v.id}>{v.name} — ₹{v.price}</span>)
                           ) : (
-                            <span className="text-lg font-bold">
-                              ₹{dish.price}
-                            </span>
+                            <span className="text-lg font-bold">₹{dish.price}</span>
                           )}
                         </div>
                       </div>
@@ -686,17 +737,9 @@ export default function PublicMenuPage() {
               <div className="w-24 h-24 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-6">
                 <Search className="w-12 h-12 text-slate-400" />
               </div>
-              <h3 className="text-2xl font-bold text-slate-900 mb-2">
-                No dishes found
-              </h3>
-              <p className="text-slate-600 text-lg mb-4">
-                Try searching with different keywords
-              </p>
-              <Button
-                onClick={() => setSearchQuery('')}
-                variant="outline"
-                className="mt-4"
-              >
+              <h3 className="text-2xl font-bold text-slate-900 mb-2">No dishes found</h3>
+              <p className="text-slate-600 text-lg mb-4">Try searching with different keywords</p>
+              <Button onClick={() => setSearchQuery('')} variant="outline" className="mt-4">
                 Clear Search
               </Button>
             </div>
@@ -705,39 +748,28 @@ export default function PublicMenuPage() {
               {filteredCategories.map((category, categoryIndex) => {
                 const isExpanded = expandedCategories.has(category.id);
                 const dishCount = category.dishes.length;
-
                 return (
                   <div
                     key={category.id}
                     id={category.id}
-                    ref={(el) => {
-                      if (el) categoryRefs.current.set(category.id, el);
-                    }}
+                    ref={(el) => { if (el) categoryRefs.current.set(category.id, el); }}
                     className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-shadow duration-300 overflow-hidden border border-slate-100"
                   >
                     <button
                       onClick={() => toggleCategory(category.id)}
                       className="w-full px-6 py-5 md:px-8 md:py-6 relative overflow-hidden text-left hover:bg-slate-50 transition-colors"
-                      style={{
-                        background: `linear-gradient(135deg, ${restaurant.theme_color}15 0%, ${restaurant.theme_color}08 100%)`,
-                      }}
+                      style={{ background: `linear-gradient(135deg, ${restaurant.theme_color}15 0%, ${restaurant.theme_color}08 100%)` }}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 flex-1">
                           <Badge
                             className="text-lg md:text-xl font-bold px-4 py-1.5 shadow-sm"
-                            style={{
-                              backgroundColor: restaurant.theme_color,
-                              color: 'white',
-                            }}
+                            style={{ backgroundColor: restaurant.theme_color, color: 'white' }}
                           >
                             {categoryIndex + 1}
                           </Badge>
                           <div>
-                            <h2
-                              className="text-2xl md:text-3xl font-bold"
-                              style={{ color: restaurant.theme_color }}
-                            >
+                            <h2 className="text-2xl md:text-3xl font-bold" style={{ color: restaurant.theme_color }}>
                               {category.name}
                             </h2>
                             <p className="text-sm text-slate-600 mt-1">
@@ -755,9 +787,7 @@ export default function PublicMenuPage() {
 
                     <div
                       className={`transition-all duration-300 ease-in-out ${
-                        isExpanded
-                          ? 'max-h-[10000px] opacity-100'
-                          : 'max-h-0 opacity-0 overflow-hidden'
+                        isExpanded ? 'max-h-[10000px] opacity-100' : 'max-h-0 opacity-0 overflow-hidden'
                       }`}
                     >
                       <div className="divide-y divide-slate-100">
@@ -806,13 +836,10 @@ export default function PublicMenuPage() {
                                           </p>
                                         )}
                                       </div>
-                                      <div className="flex-shrink-0">
+                                      <div className="flex-shrink-0 flex flex-col items-end gap-2">
                                         <div
                                           className="inline-flex flex-col items-start px-4 py-2 rounded-lg text-sm md:text-base font-semibold shadow-sm gap-0.5"
-                                          style={{
-                                            backgroundColor: `${restaurant.theme_color}15`,
-                                            color: restaurant.theme_color,
-                                          }}
+                                          style={{ backgroundColor: `${restaurant.theme_color}15`, color: restaurant.theme_color }}
                                         >
                                           {item.dish_variants?.length > 0 ? (
                                             item.dish_variants.map((v) => (
@@ -821,11 +848,19 @@ export default function PublicMenuPage() {
                                               </span>
                                             ))
                                           ) : (
-                                            <span className="text-xl md:text-2xl font-bold">
-                                              ₹{item.price}
-                                            </span>
+                                            <span className="text-xl md:text-2xl font-bold">₹{item.price}</span>
                                           )}
                                         </div>
+                                        {isTableMode && isSessionActive && claimedSeat && (
+                                          <button
+                                            onClick={() => handleAddToCart(item)}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-semibold text-white transition-all hover:opacity-90 active:scale-95"
+                                            style={{ backgroundColor: restaurant.theme_color }}
+                                          >
+                                            <Plus className="w-4 h-4" />
+                                            Add
+                                          </button>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
@@ -869,13 +904,32 @@ export default function PublicMenuPage() {
             <span className="text-xs font-medium">Search</span>
           </button>
 
+          {isTableMode && isSessionActive && claimedSeat && (
+            <button
+              onClick={() => setShowCart(true)}
+              className="flex flex-col items-center gap-1 px-4 py-2 relative"
+              style={{ color: restaurant.theme_color }}
+            >
+              <div className="relative">
+                <ShoppingCart className="w-6 h-6" />
+                {cartCount > 0 && (
+                  <span
+                    className="absolute -top-2 -right-2 w-5 h-5 rounded-full text-white text-xs flex items-center justify-center font-bold"
+                    style={{ backgroundColor: restaurant.theme_color }}
+                  >
+                    {cartCount}
+                  </span>
+                )}
+              </div>
+              <span className="text-xs font-medium">Cart</span>
+            </button>
+          )}
+
           {showScrollTop && (
             <button
               onClick={scrollToTop}
               className="flex flex-col items-center gap-1 px-4 py-2 rounded-lg transition-all"
-              style={{
-                color: restaurant.theme_color,
-              }}
+              style={{ color: restaurant.theme_color }}
             >
               <div
                 className="w-10 h-10 rounded-full flex items-center justify-center shadow-md"
@@ -890,10 +944,59 @@ export default function PublicMenuPage() {
       </div>
 
       {selectedDish && (
-        <ImageModal
-          dish={selectedDish}
+        <ImageModal dish={selectedDish} themeColor={restaurant.theme_color} onClose={() => setSelectedDish(null)} />
+      )}
+
+      {isTableMode && showRequestCard && tableContext && (
+        <RequestActivationCard
+          tableToken={tableToken!}
           themeColor={restaurant.theme_color}
-          onClose={() => setSelectedDish(null)}
+          onRequested={() => {
+            setShowRequestCard(false);
+            refreshTableContext();
+          }}
+        />
+      )}
+
+      {isTableMode && showSeatSelector && tableContext?.session && (
+        <SeatSelector
+          session={tableContext.session}
+          seats={tableContext.seats}
+          deviceId={deviceId}
+          themeColor={restaurant.theme_color}
+          onClaimed={(seat) => {
+            setClaimedSeat(seat);
+            setShowSeatSelector(false);
+            refreshTableContext();
+          }}
+        />
+      )}
+
+      {variantDish && (
+        <VariantPicker
+          dishName={variantDish.name}
+          variants={variantDish.dish_variants}
+          themeColor={restaurant.theme_color}
+          onSelect={(variant) => handleVariantSelected(variantDish, variant)}
+          onClose={() => setVariantDish(null)}
+        />
+      )}
+
+      {showCart && tableContext?.session && claimedSeat && (
+        <CartDrawer
+          items={cartItems}
+          sessionId={tableContext.session.id}
+          seatId={claimedSeat.id}
+          deviceId={deviceId}
+          themeColor={restaurant.theme_color}
+          onUpdate={setCartItems}
+          onClose={() => setShowCart(false)}
+          onOrderPlaced={() => {
+            setCartItems([]);
+            if (restaurant && tableToken) {
+              localStorage.removeItem(getCartKey(restaurant.id, tableToken));
+            }
+          }}
         />
       )}
     </div>

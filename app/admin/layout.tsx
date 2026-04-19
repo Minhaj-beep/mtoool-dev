@@ -7,16 +7,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { supabaseBrowser } from '@/lib/supabase/browser';
 import NotificationBell from '@/components/NotificationBell';
-import {
-  LayoutDashboard,
-  MenuSquare,
-  Settings,
-  QrCode,
-  CreditCard,
-  LogOut,
-  Menu as MenuIcon,
-  X,
-} from 'lucide-react';
+import { LayoutDashboard, SquareMenu as MenuSquare, Settings, QrCode, CreditCard, LogOut, Menu as MenuIcon, X, TableProperties } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AdminLayout({
@@ -70,6 +61,7 @@ export default function AdminLayout({
   const navigation = [
     { name: 'Dashboard', href: '/admin/dashboard', icon: LayoutDashboard },
     { name: 'Menus', href: '/admin/menus', icon: MenuSquare },
+    { name: 'Tables', href: '/admin/tables', icon: TableProperties },
     { name: 'QR Code', href: '/admin/qr-code', icon: QrCode },
     { name: 'Subscription', href: '/admin/subscription', icon: CreditCard },
     { name: 'Settings', href: '/admin/settings', icon: Settings },

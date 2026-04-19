@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { supabaseBrowser } from '@/lib/supabase/browser';
 import { toast } from 'sonner';
-import { Download, QrCode, Link as LinkIcon, Check, Sparkles } from 'lucide-react';
+import { Download, QrCode, Link as LinkIcon, Check, Sparkles, TableProperties, ArrowRight } from 'lucide-react';
+import Link from 'next/link';
 
 export default function QRCodePage() {
   const [qrCode, setQrCode] = useState<string>('');
@@ -168,6 +169,30 @@ export default function QRCodePage() {
           </Card>
         </div>
       </div>
+
+      <Card className="border-slate-200 shadow-sm bg-gradient-to-br from-slate-50 to-white">
+        <CardHeader>
+          <CardTitle className="text-xl flex items-center gap-2">
+            <TableProperties className="w-5 h-5" />
+            Table QR Codes
+          </CardTitle>
+          <CardDescription className="text-base">
+            Generate individual QR codes for each table to enable table ordering
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-slate-600 mb-4">
+            Table QR codes let guests scan and order directly from their seat. Each table gets a unique QR code that opens the menu in table mode.
+          </p>
+          <Link href="/admin/tables">
+            <Button variant="outline" className="flex items-center gap-2">
+              <TableProperties className="w-4 h-4" />
+              Manage Tables &amp; Table QR Codes
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          </Link>
+        </CardContent>
+      </Card>
     </div>
   );
 }
