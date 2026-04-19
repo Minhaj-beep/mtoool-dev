@@ -33,8 +33,9 @@ export default function CartDrawer({
   const total = items.reduce((sum, item) => sum + item.unit_price * item.quantity, 0);
 
   const changeQty = (index: number, delta: number) => {
-    const updated = [...items];
-    updated[index].quantity = Math.max(1, updated[index].quantity + delta);
+    const updated = items.map((item, i) =>
+      i === index ? { ...item, quantity: Math.max(1, item.quantity + delta) } : item
+    );
     onUpdate(updated);
   };
 

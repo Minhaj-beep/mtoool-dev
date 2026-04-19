@@ -224,6 +224,17 @@ export default function PublicMenuPage() {
   }, [tableToken, slug]);
 
   useEffect(() => {
+    if (!tableToken || !slug) return;
+    if (tableContext?.session?.status === 'active' && claimedSeat) return;
+
+    const interval = setInterval(() => {
+      loadTableContext();
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [tableToken, slug, tableContext, claimedSeat]);
+
+  useEffect(() => {
     if (tableToken && restaurant) {
       const cartKey = getCartKey(restaurant.id, tableToken);
       const saved = localStorage.getItem(cartKey);
