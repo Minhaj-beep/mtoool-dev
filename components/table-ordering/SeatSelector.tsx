@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Armchair, Loader as Loader2 } from 'lucide-react';
+import { Armchair, Loader as Loader2, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { TableSeat, TableSession } from '@/lib/table-ordering/types';
 
@@ -13,9 +13,10 @@ type Props = {
   deviceId: string;
   themeColor: string;
   onClaimed: (seat: TableSeat) => void;
+  onDismiss?: () => void;
 };
 
-export default function SeatSelector({ session, seats, deviceId, themeColor, onClaimed }: Props) {
+export default function SeatSelector({ session, seats, deviceId, themeColor, onClaimed, onDismiss }: Props) {
   const [selectedSeatId, setSelectedSeatId] = useState<string | null>(null);
   const [guestName, setGuestName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -54,19 +55,35 @@ export default function SeatSelector({ session, seats, deviceId, themeColor, onC
   };
 
   return (
-    <div className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5">
-        <div className="flex items-center gap-3">
-          <div
-            className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
-            style={{ backgroundColor: `${themeColor}15` }}
-          >
-            <Armchair className="w-6 h-6" style={{ color: themeColor }} />
+    <div
+      className="fixed inset-0 z-40 flex items-end sm:items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+      onClick={onDismiss}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0"
+              style={{ backgroundColor: `${themeColor}15` }}
+            >
+              <Armchair className="w-6 h-6" style={{ color: themeColor }} />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-slate-900">Choose Your Seat</h2>
+              <p className="text-sm text-slate-500">Select an available seat to start ordering</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-slate-900">Choose Your Seat</h2>
-            <p className="text-sm text-slate-500">Select an available seat to start ordering</p>
-          </div>
+          {onDismiss && (
+            <button
+              onClick={onDismiss}
+              className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         <div className="grid grid-cols-4 gap-2">

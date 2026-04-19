@@ -34,7 +34,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+    const host = request.headers.get('host') || 'localhost:3000';
+    const protocol = host.startsWith('localhost') ? 'http' : 'https';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
     const tablesWithQR = (tables || []).map((t) => ({
       ...t,
       table_url: `${appUrl}/menu/${restaurant.slug}?table=${t.table_token}`,
@@ -91,7 +93,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+    const host = request.headers.get('host') || 'localhost:3000';
+    const protocol = host.startsWith('localhost') ? 'http' : 'https';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
     const table_url = `${appUrl}/menu/${restaurant.slug}?table=${table_token}`;
     const qrCode = await generateQRCode(table_url);
 

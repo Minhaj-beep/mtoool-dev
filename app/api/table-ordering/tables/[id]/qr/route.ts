@@ -37,7 +37,9 @@ export async function GET(
       return NextResponse.json({ error: 'Table not found' }, { status: 404 });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || '';
+    const host = request.headers.get('host') || 'localhost:3000';
+    const protocol = host.startsWith('localhost') ? 'http' : 'https';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
     const table_url = `${appUrl}/menu/${restaurant.slug}?table=${table.table_token}`;
     const qrCode = await generateQRCode(table_url);
 

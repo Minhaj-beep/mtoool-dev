@@ -219,7 +219,7 @@ export default function PublicMenuPage() {
   useEffect(() => {
     if (tableToken && slug) {
       setDeviceId(getOrCreateDeviceId());
-      loadTableContext();
+      loadTableContext(true);
     }
   }, [tableToken, slug]);
 
@@ -253,7 +253,7 @@ export default function PublicMenuPage() {
     }
   }, [cartItems, tableToken, restaurant]);
 
-  const loadTableContext = async () => {
+  const loadTableContext = async (isInitial = false) => {
     setTableContextLoading(true);
     try {
       const res = await fetch(`/api/table-ordering/context?slug=${slug}&table=${tableToken}`);
@@ -261,10 +261,20 @@ export default function PublicMenuPage() {
       if (!res.ok) throw new Error(data.error);
       setTableContext(data);
 
+      const did = getOrCreateDeviceId();
+
       if (data.session?.status === 'active') {
-        const did = getOrCreateDeviceId();
         const mySeat = data.seats.find((s: TableSeat) => s.device_id === did);
-        if (mySeat) setClaimedSeat(mySeat);
+        if (mySeat) {
+          setClaimedSeat(mySeat);
+          setShowSeatSelector(false);
+        } else {
+          setShowSeatSelector(true);
+        }
+      } else if (!data.session || data.session.status === 'closed') {
+        if (isInitial) {
+          setShowRequestCard(true);
+        }
       }
     } catch (err) {
       console.error('Table context error:', err);
@@ -958,7 +968,7 @@ export default function PublicMenuPage() {
         <ImageModal dish={selectedDish} themeColor={restaurant.theme_color} onClose={() => setSelectedDish(null)} />
       )}
 
-      {isTableMode && showRequestCard && tableContext && (
+      {isTableMode && showRequestCard && (
         <RequestActivationCard
           tableToken={tableToken!}
           themeColor={restaurant.theme_color}
@@ -966,6 +976,7 @@ export default function PublicMenuPage() {
             setShowRequestCard(false);
             refreshTableContext();
           }}
+          onDismiss={() => setShowRequestCard(false)}
         />
       )}
 
@@ -980,6 +991,7 @@ export default function PublicMenuPage() {
             setShowSeatSelector(false);
             refreshTableContext();
           }}
+          onDismiss={() => setShowSeatSelector(false)}
         />
       )}
 
