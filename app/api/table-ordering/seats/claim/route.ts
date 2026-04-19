@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServiceRole } from '@/lib/supabase/server';
+import { getSupabaseServer } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = getSupabaseServiceRole();
+    const supabase = getSupabaseServer();
 
     const { data: session } = await supabase
       .from('table_sessions')
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
 
     const { data: seat } = await supabase
       .from('table_seats')
-      .select('*')
+      .select('id, status, session_id')
       .eq('id', seat_id)
       .eq('session_id', session_id)
       .maybeSingle();

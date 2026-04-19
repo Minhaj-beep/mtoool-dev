@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseRouteClient } from '@/lib/supabase/route';
-import { getSupabaseServiceRole } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,9 +27,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'session_id is required' }, { status: 400 });
     }
 
-    const serviceSupabase = getSupabaseServiceRole();
-
-    const { data: session } = await serviceSupabase
+    const { data: session } = await supabase
       .from('table_sessions')
       .select('id, status, restaurant_id')
       .eq('id', session_id)
@@ -45,11 +42,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Session already closed' }, { status: 400 });
     }
 
-    const { data: updatedSession, error } = await serviceSupabase
+    const { data: updatedSession, error } = await supabase
       .from('table_sessions')
       .update({ status: 'closed', closed_at: new Date().toISOString() })
       .eq('id', session_id)
-      .select()
+      .select('id, status, closed_at')
       .single();
 
     if (error) {

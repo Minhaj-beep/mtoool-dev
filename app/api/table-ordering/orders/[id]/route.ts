@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseRouteClient } from '@/lib/supabase/route';
-import { getSupabaseServiceRole } from '@/lib/supabase/server';
 
 const VALID_STATUSES = ['placed', 'preparing', 'served', 'completed', 'cancelled'];
 
@@ -33,23 +32,12 @@ export async function PATCH(
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 });
     }
 
-    const serviceSupabase = getSupabaseServiceRole();
-
-    const { data: order } = await serviceSupabase
-      .from('orders')
-      .select('id, restaurant_id')
-      .eq('id', params.id)
-      .maybeSingle();
-
-    if (!order || order.restaurant_id !== restaurant.id) {
-      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
-    }
-
-    const { data: updatedOrder, error } = await serviceSupabase
+    const { data: updatedOrder, error } = await supabase
       .from('orders')
       .update({ status, updated_at: new Date().toISOString() })
       .eq('id', params.id)
-      .select()
+      .eq('restaurant_id', restaurant.id)
+      .select('id, status, updated_at')
       .single();
 
     if (error) {

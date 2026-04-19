@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseRouteClient } from '@/lib/supabase/route';
-import { getSupabaseServiceRole } from '@/lib/supabase/server';
+import { getSupabaseServer } from '@/lib/supabase/server';
 
 type CartItem = {
   dish_id: string;
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const supabase = getSupabaseServiceRole();
+    const supabase = getSupabaseServer();
 
     const { data: session } = await supabase
       .from('table_sessions')
@@ -71,7 +71,6 @@ export async function POST(request: NextRequest) {
         .from('dish_variants')
         .select('id, dish_id, name, price')
         .in('id', variantIds);
-
       variantMap = new Map((variants || []).map((v) => [v.id, v]));
     }
 
@@ -132,7 +131,7 @@ export async function POST(request: NextRequest) {
         status: 'placed',
         total_amount: totalAmount,
       })
-      .select()
+      .select('id, status, total_amount, created_at')
       .single();
 
     if (orderError || !order) {
@@ -146,7 +145,6 @@ export async function POST(request: NextRequest) {
       .insert(itemsWithOrderId);
 
     if (itemsError) {
-      await supabase.from('orders').delete().eq('id', order.id);
       return NextResponse.json({ error: itemsError.message }, { status: 400 });
     }
 
@@ -179,16 +177,9 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get('session_id');
 
-    const serviceSupabase = getSupabaseServiceRole();
-
-    let query = serviceSupabase
+    let query = supabase
       .from('orders')
-      .select(`
-        *,
-        order_items(*),
-        table_seats(seat_number, claimed_name),
-        restaurant_tables(table_number)
-      `)
+      .select('*, order_items(*), table_seats(seat_number, claimed_name), restaurant_tables(table_number)')
       .eq('restaurant_id', restaurant.id)
       .order('created_at', { ascending: false });
 

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseRouteClient } from '@/lib/supabase/route';
-import { getSupabaseServiceRole } from '@/lib/supabase/server';
 
 export async function PATCH(
   request: NextRequest,
@@ -24,18 +23,6 @@ export async function PATCH(
       return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
     }
 
-    const serviceSupabase = getSupabaseServiceRole();
-
-    const { data: existing } = await serviceSupabase
-      .from('restaurant_tables')
-      .select('id, restaurant_id')
-      .eq('id', params.id)
-      .maybeSingle();
-
-    if (!existing || existing.restaurant_id !== restaurant.id) {
-      return NextResponse.json({ error: 'Table not found' }, { status: 404 });
-    }
-
     const body = await request.json();
     const { table_number, is_active } = body;
 
@@ -43,11 +30,12 @@ export async function PATCH(
     if (table_number !== undefined) updates.table_number = Number(table_number);
     if (is_active !== undefined) updates.is_active = Boolean(is_active);
 
-    const { data: table, error } = await serviceSupabase
+    const { data: table, error } = await supabase
       .from('restaurant_tables')
       .update(updates)
       .eq('id', params.id)
-      .select()
+      .eq('restaurant_id', restaurant.id)
+      .select('id, table_number, is_active, table_token')
       .single();
 
     if (error) {

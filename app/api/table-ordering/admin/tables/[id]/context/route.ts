@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseRouteClient } from '@/lib/supabase/route';
-import { getSupabaseServiceRole } from '@/lib/supabase/server';
 
 export async function GET(
   request: NextRequest,
@@ -24,11 +23,9 @@ export async function GET(
       return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
     }
 
-    const serviceSupabase = getSupabaseServiceRole();
-
-    const { data: table } = await serviceSupabase
+    const { data: table } = await supabase
       .from('restaurant_tables')
-      .select('*')
+      .select('id, table_number, is_active, table_token')
       .eq('id', params.id)
       .eq('restaurant_id', restaurant.id)
       .maybeSingle();
@@ -37,9 +34,9 @@ export async function GET(
       return NextResponse.json({ error: 'Table not found' }, { status: 404 });
     }
 
-    const { data: session } = await serviceSupabase
+    const { data: session } = await supabase
       .from('table_sessions')
-      .select('*')
+      .select('id, status, host_name, join_code, activated_at, closed_at, created_at')
       .eq('table_id', table.id)
       .in('status', ['pending', 'active'])
       .order('created_at', { ascending: false })
@@ -51,14 +48,14 @@ export async function GET(
 
     if (session) {
       const [seatsRes, ordersRes] = await Promise.all([
-        serviceSupabase
+        supabase
           .from('table_seats')
-          .select('*')
+          .select('id, seat_number, status, claimed_name, device_id, claimed_at')
           .eq('session_id', session.id)
           .order('seat_number', { ascending: true }),
-        serviceSupabase
+        supabase
           .from('orders')
-          .select('*, order_items(*), table_seats(seat_number, claimed_name), restaurant_tables(table_number)')
+          .select('id, status, total_amount, created_at, updated_at, order_items(id, item_name, variant_name, quantity, unit_price, line_total), table_seats(seat_number, claimed_name)')
           .eq('table_session_id', session.id)
           .order('created_at', { ascending: false }),
       ]);

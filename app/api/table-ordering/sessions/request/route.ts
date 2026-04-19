@@ -1,17 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServiceRole } from '@/lib/supabase/server';
-import crypto from 'crypto';
+import { getSupabaseServer } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { table_token, guest_name, party_size } = body;
+    const { table_token, guest_name } = body;
 
     if (!table_token || !guest_name) {
       return NextResponse.json({ error: 'table_token and guest_name are required' }, { status: 400 });
     }
 
-    const supabase = getSupabaseServiceRole();
+    const supabase = getSupabaseServer();
 
     const { data: table } = await supabase
       .from('restaurant_tables')
@@ -49,7 +48,7 @@ export async function POST(request: NextRequest) {
         host_name: guest_name.trim(),
         join_code,
       })
-      .select()
+      .select('id, status, host_name, join_code, created_at')
       .single();
 
     if (error) {

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseRouteClient } from '@/lib/supabase/route';
-import { getSupabaseServiceRole } from '@/lib/supabase/server';
 import { generateQRCode } from '@/lib/qr/qr-generator';
 import crypto from 'crypto';
 
@@ -23,10 +22,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
     }
 
-    const serviceSupabase = getSupabaseServiceRole();
-    const { data: tables, error } = await serviceSupabase
+    const { data: tables, error } = await supabase
       .from('restaurant_tables')
-      .select('*')
+      .select('id, table_number, table_token, is_active, created_at')
       .eq('restaurant_id', restaurant.id)
       .order('table_number', { ascending: true });
 
@@ -37,12 +35,12 @@ export async function GET(request: NextRequest) {
     const host = request.headers.get('host') || 'localhost:3000';
     const protocol = host.startsWith('localhost') ? 'http' : 'https';
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || `${protocol}://${host}`;
-    const tablesWithQR = (tables || []).map((t) => ({
+    const tablesWithUrl = (tables || []).map((t) => ({
       ...t,
       table_url: `${appUrl}/menu/${restaurant.slug}?table=${t.table_token}`,
     }));
 
-    return NextResponse.json({ tables: tablesWithQR });
+    return NextResponse.json({ tables: tablesWithUrl });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
@@ -69,16 +67,15 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { table_number, capacity } = body;
+    const { table_number } = body;
 
     if (!table_number) {
       return NextResponse.json({ error: 'table_number is required' }, { status: 400 });
     }
 
     const table_token = crypto.randomBytes(16).toString('hex');
-    const serviceSupabase = getSupabaseServiceRole();
 
-    const { data: table, error } = await serviceSupabase
+    const { data: table, error } = await supabase
       .from('restaurant_tables')
       .insert({
         restaurant_id: restaurant.id,
@@ -86,7 +83,7 @@ export async function POST(request: NextRequest) {
         table_token,
         is_active: true,
       })
-      .select()
+      .select('id, table_number, table_token, is_active, created_at')
       .single();
 
     if (error) {

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseRouteClient } from '@/lib/supabase/route';
-import { getSupabaseServiceRole } from '@/lib/supabase/server';
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,31 +27,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'seat_id is required' }, { status: 400 });
     }
 
-    const serviceSupabase = getSupabaseServiceRole();
-
-    const { data: seat } = await serviceSupabase
+    const { data: updatedSeat, error } = await supabase
       .from('table_seats')
-      .select('id, session_id, table_sessions(restaurant_id)')
-      .eq('id', seat_id)
-      .maybeSingle();
-
-    if (!seat) {
-      return NextResponse.json({ error: 'Seat not found' }, { status: 404 });
-    }
-
-    const sessionRestaurantId = (seat as any).table_sessions?.restaurant_id;
-    if (sessionRestaurantId !== restaurant.id) {
-      return NextResponse.json({ error: 'Seat not found' }, { status: 404 });
-    }
-
-    const { data: updatedSeat, error } = await serviceSupabase
-      .from('table_seats')
-      .update({
-        status: 'open',
-        claimed_name: null,
-        device_id: null,
-        claimed_at: null,
-      })
+      .update({ status: 'open', claimed_name: null, device_id: null, claimed_at: null })
       .eq('id', seat_id)
       .select()
       .single();

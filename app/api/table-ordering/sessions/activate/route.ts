@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseRouteClient } from '@/lib/supabase/route';
-import { getSupabaseServiceRole } from '@/lib/supabase/server';
 
 const DEFAULT_SEAT_COUNT = 4;
 
@@ -30,11 +29,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'session_id is required' }, { status: 400 });
     }
 
-    const serviceSupabase = getSupabaseServiceRole();
-
-    const { data: session } = await serviceSupabase
+    const { data: session } = await supabase
       .from('table_sessions')
-      .select('*, restaurant_tables(*)')
+      .select('id, status, restaurant_id')
       .eq('id', session_id)
       .eq('restaurant_id', restaurant.id)
       .maybeSingle();
@@ -47,18 +44,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Session is not pending' }, { status: 400 });
     }
 
-    const { data: updatedSession, error: updateError } = await serviceSupabase
+    const { data: updatedSession, error: updateError } = await supabase
       .from('table_sessions')
       .update({ status: 'active', activated_at: new Date().toISOString() })
       .eq('id', session_id)
-      .select()
+      .select('id, status, host_name, activated_at, created_at')
       .single();
 
     if (updateError) {
       return NextResponse.json({ error: updateError.message }, { status: 400 });
     }
 
-    const { data: existingSeats } = await serviceSupabase
+    const { data: existingSeats } = await supabase
       .from('table_seats')
       .select('id')
       .eq('session_id', session_id);
@@ -72,7 +69,7 @@ export async function POST(request: NextRequest) {
         status: 'open',
       }));
 
-      const { data: newSeats, error: seatsError } = await serviceSupabase
+      const { data: newSeats, error: seatsError } = await supabase
         .from('table_seats')
         .insert(seatRows)
         .select();

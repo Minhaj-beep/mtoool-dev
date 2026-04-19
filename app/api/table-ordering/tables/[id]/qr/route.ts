@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseRouteClient } from '@/lib/supabase/route';
-import { getSupabaseServiceRole } from '@/lib/supabase/server';
 import { generateQRCode } from '@/lib/qr/qr-generator';
 
 export async function GET(
@@ -25,10 +24,9 @@ export async function GET(
       return NextResponse.json({ error: 'Restaurant not found' }, { status: 404 });
     }
 
-    const serviceSupabase = getSupabaseServiceRole();
-    const { data: table } = await serviceSupabase
+    const { data: table } = await supabase
       .from('restaurant_tables')
-      .select('*')
+      .select('id, table_number, table_token')
       .eq('id', params.id)
       .eq('restaurant_id', restaurant.id)
       .maybeSingle();
@@ -43,7 +41,7 @@ export async function GET(
     const table_url = `${appUrl}/menu/${restaurant.slug}?table=${table.table_token}`;
     const qrCode = await generateQRCode(table_url);
 
-    return NextResponse.json({ qrCode, table_url });
+    return NextResponse.json({ qrCode, table_url, tableNumber: table.table_number });
   } catch (err) {
     console.error(err);
     return NextResponse.json({ error: 'Server error' }, { status: 500 });
